@@ -1,5 +1,9 @@
 use proc_macro::TokenStream;
 
+fn replace_dollarsign(string: &str) -> String {
+    string.replace("_dollarsign_", "$")
+}
+
 #[proc_macro] pub fn wrapping_count(item: TokenStream) -> TokenStream {
     let mut item = item.to_string();
 
@@ -39,7 +43,7 @@ use proc_macro::TokenStream;
         u8, u16, u32, u64, u128, usize
     );
 
-    item.parse().unwrap()
+    replace_dollarsign(&item).parse().unwrap()
 }
 
 #[proc_macro] pub fn count(item: TokenStream) -> TokenStream {
@@ -82,5 +86,5 @@ use proc_macro::TokenStream;
         u8, u16, u32, u64, u128, usize
     );
 
-    item.parse().unwrap()
+    replace_dollarsign(&item).parse().unwrap()
 }
