@@ -1,0 +1,11 @@
+[package]
+name = "count-macro"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A simple Rust macro to perform compile time counting"
+
+[lib]
+proc-macro = true
+
+[dependencies]
