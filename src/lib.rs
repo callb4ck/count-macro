@@ -1,90 +1,185 @@
-use proc_macro::TokenStream;
+use proc_macro::{Group, Literal, Ident, TokenStream, TokenTree};
 
-fn replace_dollarsign(string: &str) -> String {
-    string.replace("_dollarsign_", "$")
+fn map_tokens(token: TokenTree, counter: &mut usize) -> TokenTree {
+    match token {
+        TokenTree::Ident(v) => {
+            let ident = v.to_string();
+
+            let old = counter.clone();
+            if ident == "_int_" {
+                *counter += 1;
+                TokenTree::Literal(Literal::usize_unsuffixed(old))
+            } else {
+                let newident = ident.replace("_int_", &old.to_string());
+
+                if newident != ident {
+                    *counter += 1;
+                }
+
+                TokenTree::Ident(Ident::new(&newident, v.span()))
+            }
+        }
+
+        TokenTree::Group(v) => TokenTree::Group(Group::new(
+            v.delimiter(),
+            v.stream()
+                .into_iter()
+                .map(|token| map_tokens(token, counter))
+                .collect(),
+        )),
+
+        v => v,
+    }
 }
 
-#[proc_macro] pub fn wrapping_count(item: TokenStream) -> TokenStream {
-    let mut item = item.to_string();
+/// Count without wrapping (panic if counter exceeds usize).
+/// Every instance of `_int_` will be replaced with the counter value and then the counter will be increased.
+///
+/// # Examples
+///
+/// ## Ident to literal
+/// ```rust
+///
+/// use count_macro::count;
+///
+/// let a = count!(vec![_int_, _int_, _int_]);
+/// assert_eq!(a, vec![0, 1, 2]);
+///
+/// ```
+///
+/// ## Ident to ident
+/// ```rust
+///
+/// use count_macro::count;
+///
+/// count! {
+///     let a_int_ = "Hello";
+///     let a_int_ = "World";
+/// }
+///
+/// assert_eq!(a0, "Hello");
+/// assert_eq!(a1, "World");
+///
+/// ```
+///
+/// ## In macro
+/// ```rust
+///
+/// use count_macro::count;
+/// 
+/// macro_rules! my_macro {
+///     ($($v:expr),*) => {
+///         count!{
+///             $(
+///                 let _ = $v; // Ignoring $v
+/// 
+///                 println!("{}", _int_);
+///             )*
+///         }
+///     };
+/// }
+/// 
+/// my_macro!('@', '@', '@', '@'); // Will print from 0 to 3
+///
+/// ```
+#[proc_macro]
+pub fn count(item: TokenStream) -> TokenStream {
+    let mut counter = 0;
 
-    // Gonna eventually use generics?
-    // Couldn't find a way to have generic numbers (AKA initialize a generic with 0)
-    macro_rules! replace {
-        ($($T:tt),*) => {
-            $(
-                {
-                    let placeholder = concat!("_", stringify!($T), "_");
-
-                    if item.contains(placeholder) {
-                        let mut new_string = String::new();
-                        let mut counter: $T = 0;
-
-                        let mut split = item.split(placeholder);
-
-                        if let Some(v) = split.next() {
-                            new_string.push_str(v);
-                        }
-
-                        for to_replace in split {
-                            new_string.push_str(&counter.to_string());
-                            new_string.push_str(to_replace);
-                            counter = counter.wrapping_add(1);
-                        }
-
-                        item = new_string;
-                    }
-                }
-            )*
-        };
-    }
-
-    replace!(
-        i8, i16, i32, i64, i128, isize,
-        u8, u16, u32, u64, u128, usize
-    );
-
-    replace_dollarsign(&item).parse().unwrap()
+    item.into_iter()
+        .map(|token| map_tokens(token, &mut counter))
+        .collect()
 }
 
-#[proc_macro] pub fn count(item: TokenStream) -> TokenStream {
-    let mut item = item.to_string();
 
-    macro_rules! replace {
-        ($($T:tt),*) => {
-            $(
-                {
-                    let placeholder = concat!("_", stringify!($T), "_");
 
-                    if item.contains(placeholder) {
-                        let mut new_string = String::new();
-                        let mut int_counter: $T = 0;
+fn wrapping_map_tokens(token: TokenTree, counter: &mut usize) -> TokenTree {
+    match token {
+        TokenTree::Ident(v) => {
+            let ident = v.to_string();
 
-                        let mut split = item.split(placeholder);
+            let old = counter.clone();
+            if ident == "_int_" {
+                *counter = counter.wrapping_add(1);
+                TokenTree::Literal(Literal::usize_unsuffixed(old))
+            } else {
+                let newident = ident.replace("_int_", &old.to_string());
 
-                        if let Some(v) = split.next() {
-                            new_string.push_str(v);
-                        }
-
-                        for to_replace in split {
-                            new_string.push_str(&int_counter.to_string());
-                            new_string.push_str(to_replace);
-                            match int_counter.checked_add(1) {
-                                Some(_) => int_counter += 1,
-                                _ => return r#"compile_error!("Counter overflown, try using wrapping_count or changing type")"#.parse().unwrap()
-                            }
-                        }
-
-                        item = new_string;
-                    }
+                if newident != ident {
+                    *counter = counter.wrapping_add(1);
                 }
-            )*
-        };
+
+                TokenTree::Ident(Ident::new(&newident, v.span()))
+            }
+        }
+
+        TokenTree::Group(v) => TokenTree::Group(Group::new(
+            v.delimiter(),
+            v.stream()
+                .into_iter()
+                .map(|token| wrapping_map_tokens(token, counter))
+                .collect(),
+        )),
+
+        v => v,
     }
+}
 
-    replace!(
-        i8, i16, i32, i64, i128, isize,
-        u8, u16, u32, u64, u128, usize
-    );
+/// Count with wrapping (wraps to 0 if counter exceeds usize).
+/// Every instance of `_int_` will be replaced with the counter value and then the counter will be increased.
+///
+/// # Examples
+///
+/// ## Ident to literal
+/// ```rust
+///
+/// use count_macro::wrapping_count;
+///
+/// let a = wrapping_count!(vec![_int_, _int_, _int_]);
+/// assert_eq!(a, vec![0, 1, 2]);
+///
+/// ```
+///
+/// ## Ident to ident
+/// ```rust
+///
+/// use count_macro::wrapping_count;
+///
+/// wrapping_count! {
+///     let a_int_ = "Hello";
+///     let a_int_ = "World";
+/// }
+///
+/// assert_eq!(a0, "Hello");
+/// assert_eq!(a1, "World");
+///
+/// ```
+///
+/// ## In macro
+/// ```rust
+///
+/// use count_macro::wrapping_count;
+/// 
+/// macro_rules! my_macro {
+///     ($($v:expr),*) => {
+///         wrapping_count!{
+///             $(
+///                 let _ = $v; // Ignoring $v
+/// 
+///                 println!("{}", _int_);
+///             )*
+///         }
+///     };
+/// }
+/// 
+/// my_macro!('@', '@', '@', '@'); // Will print from 0 to 3
+///
+/// ```
+#[proc_macro]
+pub fn wrapping_count(item: TokenStream) -> TokenStream {
+    let mut counter = 0;
 
-    replace_dollarsign(&item).parse().unwrap()
+    item.into_iter()
+        .map(|token| wrapping_map_tokens(token, &mut counter))
+        .collect()
 }
