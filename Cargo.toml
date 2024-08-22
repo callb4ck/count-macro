@@ -1,12 +1,12 @@
 [package]
 name = "count-macro"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "MIT"
 description = "A simple Rust macro to perform compile time counting"
 keywords = ["macro", "procedural", "count"]
 categories = ["rust-patterns", "development-tools::procedural-macro-helpers"]
-repository = "https://github.com/DumbMahreeo/count-macro"
+repository = "https://github.com/callb4ck/count-macro"
 
 [lib]
 proc-macro = true
